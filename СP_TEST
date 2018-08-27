@@ -1,0 +1,400 @@
+// ConsoleApplication21.cpp: определяет точку входа для консольного приложения.
+//
+
+#include "stdafx.h"
+#if defined(_WIN32)
+#include <Windows.h>
+
+#elif defined(__unix__) || defined(__unix) || defined(unix) || (defined(__APPLE__) && defined(__MACH__))
+#include <unistd.h>
+#include <sys/resource.h>
+#include <sys/times.h>
+#include <time.h>
+
+#else
+#error "Unable to define time for an unknown OS."
+#endif
+int random(int number) {                   // Тут прописіваем рандом в зависимости от типа ос
+#if defined(_WIN32)
+	SYSTEMTIME sh;
+	GetLocalTime(&sh);
+	return ((sh.wMilliseconds+__rdtsc()) % GetTickCount()) % number;
+#elif defined(__unix__) || defined(__unix) || defined(unix) || (defined(__APPLE__) && defined(__MACH__))
+#if defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)
+										   /* Prefer high-res POSIX timers, when available. */
+	{
+		clockid_t id;
+		struct timespec ts;
+#if _POSIX_CPUTIME > 0
+		/* Clock ids vary by OS.  Query the id, if possible. */
+		if (clock_getcpuclockid(0, &id) == -1)
+#endif
+#if defined(CLOCK_PROCESS_CPUTIME_ID)
+			/* Use known clock id for AIX, Linux, or Solaris. */
+			id = CLOCK_PROCESS_CPUTIME_ID;
+#elif defined(CLOCK_VIRTUAL)
+			/* Use known clock id for BSD or HP-UX. */
+			id = CLOCK_VIRTUAL;
+#else
+			id = (clockid_t)-1;
+#endif
+		if (id != (clockid_t)-1 && clock_gettime(id, &ts) != -1)
+			return ((double)ts.tv_sec +
+			(double)ts.tv_nsec / 1000000000.0) % number;
+}
+#endif
+
+#if defined(RUSAGE_SELF)
+	{
+		struct rusage rusage;
+		if (getrusage(RUSAGE_SELF, &rusage) != -1)
+			return ((double)rusage.ru_utime.tv_sec +
+			(double)rusage.ru_utime.tv_usec / 1000000.0) % number;
+	}
+#endif
+
+#if defined(_SC_CLK_TCK)
+	{
+		const double ticks = (double)sysconf(_SC_CLK_TCK);
+		struct tms tms;
+		if (times(&tms) != (clock_t)-1)
+			return ((double)tms.tms_utime / ticks) % number;
+	}
+#endif
+
+#if defined(CLOCKS_PER_SEC)
+	{
+		clock_t cl = clock();
+		if (cl != (clock_t)-1)
+			return (double)cl / (double)CLOCKS_PER_SEC;
+	}
+
+#endif
+#else
+#error "Unable to define time for an unknown OS."
+#endif
+}
+template <class T>
+class Vector {
+public:
+	int size;
+	T* data;
+	void operator<<(int count);
+	Vector();
+	Vector(int);
+	void drop_back(int);
+	void insert(T);
+	int Size() const;
+	T& operator [](int i);
+};
+template <class  T>
+Vector<T>::Vector() { // void constructor
+	size = 0;
+	data = new T[0];
+};
+template <class  T>
+Vector<T>::Vector(int l) { // just a simple constructor
+	size = l;
+	delete[] data;
+	data = new T[l];
+	for (int i = 0; i < l; i++)
+		data[i] = random(10);
+};
+template <class  T>
+int Vector<T>::Size(void) const { // how we know count of array?
+	return size;
+};
+template <class  T>
+T& Vector<T>::operator[](int i) { // Best of the best array operator
+	return data[i];
+};
+template <class  T>
+void Vector<T>::operator<<(int count) { // Best of the best output vector operator
+	for (int i = 0; i < count; i++)
+		printf("%d", data[i]);
+};
+
+template<class T>
+void Vector<T>::insert(T new_value) {	// insert by perfectly forwarding into element at end
+	T* buf;
+	buf = new T[size];
+	for (int i = 0; i < size; i++)
+		buf[i] = data[i];
+	delete[] data;
+	size++;
+	data = new T[size ];
+	for (int i = 0; i < size - 1; i++)
+	data[i] = buf[i];
+	data[size - 1] = new_value;
+};
+template<class T>
+void Vector<T>::drop_back(int count) {	// delete count of last element.
+	T* buf;
+	buf = new T[size - count];
+	for (int i = 0; i < size - count; i++)
+		buf[i] = data[i];
+	delete[] data;
+	data = new T[size - count];
+	data = buf;
+};
+
+template <class T, class P>
+class Map {
+public:
+	int size;
+	T* data1;
+	P* data2;
+	Map();
+	Map(int number);
+	void drop_back(int);
+	void insert(P);
+	void insert(T,P);
+	int Size() const;
+	P& operator[](int i);
+	void operator << (int count);
+};
+template <class T, class P>
+Map<T,P>::Map() {
+	size = 0;
+	data1 = new T[0];
+	data2 = new P[0];
+}
+template <class T, class P>
+Map<T, P>::Map(int number) {
+	size = number;
+	data1 = new T[number];
+	data2 = new P[number];
+	for (int i = 0; i < number; i++) {
+		data1[i] = i + 1;
+		data2[i] = random(10);
+	}
+}
+template <class T, class P>
+void Map<T, P>::drop_back(int number) {
+	size = size - number;
+	T* buf1 = data1;
+	P* buf2 = data2;
+	delete[] data1;
+	delete[] data2;
+	data1 = new T[size - 1];
+	data2 = new P[size - 1];
+	for (int i = 0; i < size - number; i++) {
+		data1[i] = buf1[i];
+		data2[i] = buf2[i];
+	}
+}
+
+template <class T, class P>
+void Map<T, P>::insert(P obj) {
+	size = size + 1;
+	T* buf1 = data1;
+	P* buf2 = data2;
+	Delete[] data1;
+	Delete[] data2;
+	data1 = new T[size];
+	data2 = new P[size];
+	data1[size - 1] = data[size - 2] + 1;
+	data2[size - 1] = obj;
+}
+template <class T, class P>
+void Map<T, P>::insert(T key,P obj) {
+	size = size + 1;
+	T* buf1 = data1;
+	P* buf2 = data2;
+	Delete[] data1;
+	Delete[] data2;
+	data1 = new T[size];
+	data2 = new P[size];
+	data1[size - 1] = key;
+	data2[size - 1] = obj;
+}
+template <class T, class P>
+int Map<T, P>::Size(void) const {
+	return size;
+}
+template <class T, class P>
+P& Map<T, P>::operator[](int i)  {
+	return data2[i];
+}
+template <class T, class P>
+void Map<T, P>::operator<<(int count) {
+	for (int i = 0; i < count; i++)
+		printf("%d", data2[i]);
+}
+
+
+class Pair_containers {
+public:
+	Vector< int > first;
+	Map < int, int> second;
+	Pair_containers() {
+
+	};
+	Pair_containers(Vector<int> a, Map <int, int> b) {
+		first = a;
+		second = b;
+	};
+
+};
+
+struct GUI {
+public:
+	void main_page() {
+		system("cls");
+		printf("|----------------------------------------------------Main menu-------------------------------------|\n");
+		printf("|0 - input number of elements in the containers                                                    |\n");
+		printf("|1 - generate containers                                                                           |\n");
+		printf("|2 - delete random number of elements                                                              |\n");
+		printf("|3 - synhronize containers                                                                         |\n");
+		printf("|s - show containers                                                                               |\n");
+		printf("|q - exit                                                                                          |\n");
+		printf("|--------------------------------------------------------------------------------------------------|\n");
+	}
+	int null_page() {
+		system("cls");
+		int output;
+		printf("input number of elements in containers:");
+		scanf_s("%i", &output);
+		return output;
+	}
+	Pair_containers first_page(int count_element) {
+		Vector<int> first(count_element);
+		Map <int, int> second(count_element);
+		Pair_containers buf;
+		buf.first = first;
+		buf.second = second;
+		return buf;
+	}
+	template < typename T, typename P>
+	void second_page(Vector<P> first, Map<T, P> second) {
+		Delete(&first);
+		Delete(&second);
+	}
+	template < class T, class P>
+	void third_page(Vector<P>& first, Map<T, P>& second) {
+		synhro(first, second);
+	}
+	char q_page() {
+		return 'q';
+	}
+};
+
+template<class A>
+void Auto_write(A a) {
+	for (int i = 0; i < a.size; i++)
+		a[i] = random(10);
+};
+
+template<class A>
+void Delete(A a) {
+	a->drop_back(random(15));
+};
+
+template<typename A, typename B>
+void synhro(Vector<A> first, Map<B, A> second) {
+	bool synhr = false;
+	for (int i = 0; i < first.Size(); i++) {
+		synhr = false;
+		for (int j = 0; j < second.Size(); j++) {
+			if (first[i] == second[j]) {
+				synhr = true;
+				break;
+			}
+			if (synhr == true) {
+				first[i] = first[first.size - 1];
+				first.drop_back(1);
+			}
+		}
+	}
+	for (int i = 0; i < second.Size(); i++) {
+		synhr = false;
+		for (int j = 0; j < first.Size(); j++) {
+			if (second[i] == first[j]) {
+				synhr = true;
+				break;
+			}
+			if (synhr == true) {
+				second[i] = second[second.size - 1];
+				second.drop_back(1);
+			}
+		}
+	}
+}
+template<typename A>
+void synhro(Vector<A> *first, Map<A, A> *second) {
+	bool synhr = false;
+	for (int i = 0; i < first->size; i++) {
+		synhr = false;
+		for (int j = 0; j < second->size; j++) {
+			if (first->operator[](i) == second->operator[](i)) {
+				synhr = true;
+				break;
+			}
+			if (synhr == true) {
+				first[i] = first[first->size - 1];
+				first->drop_back(1);
+			}
+		}
+	}
+	for (int i = 0; i < second->size; i++) {
+		synhr = false;
+		for (int j = 0; j < first->size; j++) {
+			if (second->operator[](i) == first->operator[](i)) {
+				synhr = true;
+				break;
+			}
+			if (synhr == true) {
+				second[i] = second[second->size - 1];
+				second->drop_back(1);
+			}
+		}
+	}
+};
+int main()
+{
+	int count = 0;
+	Pair_containers par;
+	GUI menu;
+	char choise;
+	while (true) {
+		menu.main_page();
+		choise = getchar();
+		
+		switch (choise) {
+		case '0': {
+			count = menu.null_page();
+			break;
+		}
+		case '1': {
+
+			par = menu.first_page(count);
+			break;
+		}
+		case '2': {
+			menu.second_page(par.first, par.second);
+			break;
+		}
+		case '3': {
+			synhro(&par.first, &par.second);
+			break;
+		}
+		case 's': {
+			system("cls");
+			par.first << par.first.Size();
+			printf("\n");
+			par.second << par.second.Size();
+			getchar();
+			getchar();
+			break;
+		}
+		case 'q': goto end;
+		}
+
+	}
+end:
+	return 0;
+
+
+}
+
+
